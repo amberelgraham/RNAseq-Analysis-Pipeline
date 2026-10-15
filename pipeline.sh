@@ -124,9 +124,20 @@ mkdir -p "$OUTPUT_DIR/alignment_results"
 
 
 # Read each sample pair from the metadata file,  END1 and END2 are the paired reads (R1 and R2).
+
+# Ensure output directory exists
+mkdir -p "$OUTPUT_DIR/alignment_results"
+
 #echo prints sample being processed
 tail -n +2 "$FASTQ_DIR/Tco2.fqfiles" | while read SAMPLE TYPE REP TIME TREATMENT END1 END2
 do
+# Skip samples already aligned
+if [ -s "$OUTPUT_DIR/alignment_results/${SAMPLE}_sorted.bam" ] &&
+   [ -s "$OUTPUT_DIR/alignment_results/${SAMPLE}_sorted.bam.bai" ]; then
+    echo "Skipping $SAMPLE"
+    continue
+fi
+
         echo "Processing $SAMPLE"
 
 #7. Align paired reads with bowtie2 against teh T. congolense reference genome
@@ -146,6 +157,12 @@ do
 
 #8. Convert SAM to BAM
 # SAM = text alignment format
+# Stop processing this sample if Bowtie2 failed
+if [ $? -ne 0 ]; then
+    echo "Alignment failed for $SAMPLE"
+    continue
+fi
+
         # BAM = binary alignment format
 	#I had to search this up, use samtool and then samtools view --help
         samtools view -b \
@@ -160,6 +177,45 @@ do
         # Index sorted BAM, accesing genomic regions
         samtools index "$OUTPUT_DIR/alignment_results/${SAMPLE}_sorted.bam"
 
+# Remove intermediate files after successful indexing
+if [ -s "$OUTPUT_DIR/alignment_results/${SAMPLE}_sorted.bam.bai" ]; then
+    rm -f "$OUTPUT_DIR/alignment_results/$SAMPLE.sam"
+    rm -f "$OUTPUT_DIR/alignment_results/$SAMPLE.bam"
+fi
+
 done
 
-#Now need todo question 4
+# QUESTION 4 - Count alignments overlapping each annotated gene
+
+BED_FILE="$DATA_DIR/TriTrypDB-46_TcongolenseIL3000_2019.bed"
+COUNT_DIR="$OUTPUT_DIR/gene_counts"
+
+mkdir -p "$COUNT_DIR"
+
+for BAM in "$OUTPUT_DIR"/alignment_results/*_sorted.bam
+do
+    SAMPLE=$(basename "$BAM" _sorted.bam)
+
+    echo "Counting genes for $SAMPLE"
+
+    bedtools coverage \
+        -a "$BED_FILE" \
+        -b "$BAM" \
+        -counts > "$COUNT_DIR/${SAMPLE}_counts.tsv"
+done
+
+# QUESTIONS 5 AND 6
+# Calculate group mean expression and fold changes.
+# Run the analysis script from the same directory as this pipeline.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+bash "$SCRIPT_DIR/run_analysis.sh"
+
+# QUESTIONS 5 AND 6
+# Calculate average gene expression and fold changes.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+bash "$SCRIPT_DIR/run_analysis.sh"
+

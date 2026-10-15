@@ -1,2 +1,24 @@
 fastq_results/
+# Genome and alignment files
+genome/
+alignment_results/
+Tc.A.H.pschr_*
+
+# Generated results
+fastq_results/
+gene_counts/
+expression_results/
+alignment.log
+test_gene_counts.tsv
+
+# Raw sequencing data
+*.fq.gz
+*.fastq.gz
+
+# Alignment formats
+*.sam
+*.bam
+*.bai
+*.bt2
+*.bt2l
 
